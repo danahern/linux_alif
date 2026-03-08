@@ -12,7 +12,7 @@
 	compatible = "alif,ensemble";
 
 	aliases {
-		serial0 = &uart4;
+		serial0 = &uart2;
 	};
 
 	reg_3p3v: regulator-3v3 {

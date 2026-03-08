@@ -124,7 +124,7 @@
 
 /* Memory Defines */
 #define MEM_STITCH_STATUS "okay"
-#define MEM_HYPER_STATUS  "disabled"
+#define MEM_HYPER_STATUS  "okay"
 #define MEM_HYP_STITCH_STATUS "disabled"
 
 /* Ethosu NPU */

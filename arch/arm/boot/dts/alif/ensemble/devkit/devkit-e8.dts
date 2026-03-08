@@ -12,7 +12,7 @@
 	compatible = "alif,ensemble";
 
 	aliases {
-		serial0 = &uart4;
+		serial0 = &uart2;
 	};
 
 	reg_3p3v: regulator-3v3 {
@@ -45,8 +45,8 @@
 	};
 
 	chosen {
-		bootargs = "console=ttyS0,115200n8 \
-		root=mtd:physmap-flash.0 \
+		bootargs = "earlycon=uart8250,mmio32,0x4901a000,115200 console=ttyS0,115200n8 \
+		log_buf_len=65536 root=mtd:physmap-flash.0 \
 		rootfstype=cramfs ro loglevel=9";
 	};
 
