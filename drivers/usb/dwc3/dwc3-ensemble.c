@@ -94,7 +94,8 @@ static int dwc3_ensemble_probe(struct platform_device *pdev)
 	platform_set_drvdata(pdev, ensemble);
 
 	for (i = 0; i < ensemble->num_clks; i++) {
-		ensemble->clks[i] = devm_clk_get(dev, ensemble->clk_names[i]);
+		ensemble->clks[i] = devm_clk_get_optional(dev,
+							   ensemble->clk_names[i]);
 		if (IS_ERR(ensemble->clks[i])) {
 			dev_err(dev, "failed to get clock: %s\n",
 				ensemble->clk_names[i]);
@@ -103,10 +104,13 @@ static int dwc3_ensemble_probe(struct platform_device *pdev)
 	}
 
 	for (i = 0; i < ensemble->num_clks; i++) {
+		if (!ensemble->clks[i])
+			continue;
 		ret = clk_prepare_enable(ensemble->clks[i]);
 		if (ret) {
 			while (i-- > 0)
-				clk_disable_unprepare(ensemble->clks[i]);
+				if (ensemble->clks[i])
+					clk_disable_unprepare(ensemble->clks[i]);
 			return ret;
 		}
 	}
@@ -117,7 +121,8 @@ static int dwc3_ensemble_probe(struct platform_device *pdev)
 	}
 
 
-	if (ensemble->suspend_clk_idx >= 0)
+	if (ensemble->suspend_clk_idx >= 0 &&
+	    ensemble->clks[ensemble->suspend_clk_idx])
 		clk_prepare_enable(ensemble->clks[ensemble->suspend_clk_idx]);
 
 	ensemble->vdd33 = devm_regulator_get(dev, "vdd33");
@@ -161,9 +166,11 @@ vdd18_err:
 	regulator_disable(ensemble->vdd33);
 vdd33_err:
 	for (i = ensemble->num_clks - 1; i >= 0; i--)
-		clk_disable_unprepare(ensemble->clks[i]);
+		if (ensemble->clks[i])
+			clk_disable_unprepare(ensemble->clks[i]);
 
-	if (ensemble->suspend_clk_idx >= 0)
+	if (ensemble->suspend_clk_idx >= 0 &&
+	    ensemble->clks[ensemble->suspend_clk_idx])
 		clk_disable_unprepare(ensemble->clks[ensemble->suspend_clk_idx]);
 
 	return ret;
@@ -177,9 +184,11 @@ static void dwc3_ensemble_remove(struct platform_device *pdev)
 	device_for_each_child(&pdev->dev, NULL, dwc3_ensemble_remove_child);
 
 	for (i = ensemble->num_clks - 1; i >= 0; i--)
-		clk_disable_unprepare(ensemble->clks[i]);
+		if (ensemble->clks[i])
+			clk_disable_unprepare(ensemble->clks[i]);
 
-	if (ensemble->suspend_clk_idx >= 0)
+	if (ensemble->suspend_clk_idx >= 0 &&
+	    ensemble->clks[ensemble->suspend_clk_idx])
 		clk_disable_unprepare(ensemble->clks[ensemble->suspend_clk_idx]);
 
 	regulator_disable(ensemble->vdd33);
@@ -208,7 +217,8 @@ static int dwc3_ensemble_suspend(struct device *dev)
 	int i;
 
 	for (i = ensemble->num_clks - 1; i >= 0; i--)
-		clk_disable_unprepare(ensemble->clks[i]);
+		if (ensemble->clks[i])
+			clk_disable_unprepare(ensemble->clks[i]);
 
 	regulator_disable(ensemble->vdd33);
 	regulator_disable(ensemble->vdd18);
@@ -233,10 +243,13 @@ static int dwc3_ensemble_resume(struct device *dev)
 	}
 
 	for (i = 0; i < ensemble->num_clks; i++) {
+		if (!ensemble->clks[i])
+			continue;
 		ret = clk_prepare_enable(ensemble->clks[i]);
 		if (ret) {
 			while (i-- > 0)
-				clk_disable_unprepare(ensemble->clks[i]);
+				if (ensemble->clks[i])
+					clk_disable_unprepare(ensemble->clks[i]);
 			return ret;
 		}
 	}

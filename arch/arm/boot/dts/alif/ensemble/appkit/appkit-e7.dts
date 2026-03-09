@@ -51,7 +51,7 @@
 		bootargs = "earlycon=uart8250,mmio32,0x4901a000 \
 		console=ttyS0,115200n8 \
 		root=mtd:physmap-flash.0 \
-		rootfstype=cramfs ro init=/sbin/preinit loglevel=9";
+		rootfstype=cramfs ro loglevel=9 clk_ignore_unused";
 	};
 
 	sound {
@@ -77,28 +77,46 @@
 /* E7 has 32MB ISSI HyperRAM (not 64MB like E8) */
 &mem_hyperam {
 	reg = <0xa0000000 0x2000000>;
-	status = MEM_HYPER_STATUS;
+	status = "okay";
 };
 
 &cpu1 {
 	status = CPU1_STATUS;
 };
 
+/*
+ * Hard-code memory layout — bypass DCT macros.
+ * SRAM0 only (4MB) — SRAM1 is firewall-protected (FC5 blocks A32 access).
+ * Known-working layout: SRAM 4MB + MRAM ~2.4MB + HyperRAM 32MB.
+ * Using 0x7DE000 (~8MB stitch) triggers firewall exception at 0x025FF000.
+ */
 &mem_stitch {
-	status = MEM_STITCH_STATUS;
+	reg = <0x02000000 0x400000 0x08010000 0x26f000>;
+	status = "okay";
 };
 
 &mem_hyp_stitch {
-	status = MEM_HYP_STITCH_STATUS;
+	status = "disabled";
 };
 
 &utimer {
 	status = UTIMER0_STATUS;
 };
 
+/*
+ * DWC3 USB workaround: remove clock/PHY dependencies on broken MHU → SE chain.
+ * TF-A enables USB clocks (CGU bits 21-23, PERIPH_CLK_ENA = 0x11111113)
+ * before jumping to Linux. The ensemble glue driver's power_control() handles
+ * PHY power-on register writes directly. Remove this workaround once the full
+ * MHU → SE → clock chain is verified working end-to-end.
+ */
 &hsusb {
+	/delete-property/ clocks;
+	/delete-property/ clock-names;
 	status = HSUSB_STATUS;
 	dwc3: usb@48200000 {
+		/delete-property/ phy;
+		/delete-property/ phy-names;
 		status = HSUSB_STATUS;
 	};
 };
