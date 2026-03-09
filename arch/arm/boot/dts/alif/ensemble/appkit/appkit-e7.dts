@@ -51,7 +51,7 @@
 		bootargs = "earlycon=uart8250,mmio32,0x4901a000 \
 		console=ttyS0,115200n8 \
 		root=mtd:physmap-flash.0 \
-		rootfstype=cramfs ro loglevel=9 clk_ignore_unused";
+		rootfstype=cramfs ro init=/sbin/preinit loglevel=9 clk_ignore_unused";
 	};
 
 	sound {
