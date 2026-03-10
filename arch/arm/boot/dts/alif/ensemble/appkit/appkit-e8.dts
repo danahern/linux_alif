@@ -92,16 +92,16 @@
 	status = CPU1_STATUS;
 };
 
-/* E8 has 64MB Macronix HyperRAM — disabled until verified on E8 */
+/* E8 has 64MB Macronix HyperRAM — TF-A initializes with HYPRAM_EN=1 */
 &mem_hyperam {
 	reg = <0xa0000000 0x4000000>;
-	status = "disabled";
+	status = "okay";
 };
 
 /*
  * Delete ethosu reserved-memory nodes — they reference HyperRAM addresses
- * (0xa2000000, 0xa3000000) which cause DMA pool creation to crash when
- * HyperRAM is disabled. Re-enable when HyperRAM is verified working.
+ * (0xa2000000, 0xa3000000) and the ethosu driver is not needed for Linux.
+ * Keeping these would waste 64MB of HyperRAM for unused NPU DMA pools.
  */
 /delete-node/ &ethosu_reserved;
 /delete-node/ &ethosu_sram;
