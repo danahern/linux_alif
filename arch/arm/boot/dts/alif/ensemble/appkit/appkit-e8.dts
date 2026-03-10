@@ -1,6 +1,9 @@
 // SPDX-License-Identifier: (GPL-2.0+)
 /*
  * Copyright (C) 2025 Alif Semiconductor
+ *
+ * AppKit-E8 — 64MB Macronix HyperRAM variant
+ * UART/USB workarounds for broken MHU → SE → clock chain.
  */
 /dts-v1/;
 
@@ -45,9 +48,24 @@
 	};
 
 	chosen {
-		bootargs = "console=ttyS0,115200n8 \
-		root=mtd:physmap-flash.0 \
-		rootfstype=cramfs ro loglevel=9";
+		bootargs = "earlycon=uart8250,mmio32,0x4901a000 \
+		console=ttyS0,115200n8 \
+		root=/dev/mtdblock0 \
+		rootfstype=cramfs ro loglevel=9 clk_ignore_unused";
+	};
+
+	/*
+	 * MRAM rootfs region as mtd-ram — enables mtd_point() for cramfs XIP.
+	 * Yocto builds cramfs-xip images with executables stored uncompressed
+	 * and page-aligned. mtd_point() is required for XIP to work; without it,
+	 * cramfs tries to decompress uncompressed XIP data → Z_DATA_ERROR.
+	 * map_ram supports mtd_point(); map_rom does not.
+	 * Also blocks CONFIG_MTD_PHYSMAP_COMPAT CFI probe (claims region first).
+	 */
+	rootfs_flash: flash@80400000 {
+		compatible = "mtd-ram";
+		reg = <0x80400000 0x180000>;
+		bank-width = <4>;
 	};
 
 	sound {
@@ -74,26 +92,59 @@
 	status = CPU1_STATUS;
 };
 
-&mem_stitch {
-	status = MEM_STITCH_STATUS;
+/* E8 has 64MB Macronix HyperRAM — disabled until verified on E8 */
+&mem_hyperam {
+	reg = <0xa0000000 0x4000000>;
+	status = "disabled";
 };
 
-&mem_hyperam {
-	status = MEM_HYPER_STATUS;
+/*
+ * Delete ethosu reserved-memory nodes — they reference HyperRAM addresses
+ * (0xa2000000, 0xa3000000) which cause DMA pool creation to crash when
+ * HyperRAM is disabled. Re-enable when HyperRAM is verified working.
+ */
+/delete-node/ &ethosu_reserved;
+/delete-node/ &ethosu_sram;
+
+/*
+ * SRAM0: 4MB @ 0x02000000
+ * SRAM1: 4MB @ 0x08000000 (NOT contiguous with SRAM0).
+ * TF-A reserves first 160KB of SRAM1 (ARM_TRUSTED_SRAM_BASE=0x08000000,
+ * PLAT_ARM_TRUSTED_SRAM_SIZE=0x28000). Linux gets the rest.
+ */
+&mem_stitch {
+	reg = <0x02000000 0x400000>;
+	status = "okay";
+};
+
+/ {
+	sram1: memory@8028000 {
+		device_type = "memory";
+		reg = <0x08028000 0x3D8000>;
+	};
 };
 
 &mem_hyp_stitch {
-	status = MEM_HYP_STITCH_STATUS;
+	status = "disabled";
 };
 
 &utimer {
 	status = UTIMER0_STATUS;
 };
 
+/*
+ * DWC3 USB workaround: remove clock/PHY dependencies on broken MHU → SE chain.
+ * TF-A enables USB clocks (CGU bits 21-23, PERIPH_CLK_ENA = 0x11111113)
+ * before jumping to Linux.
+ */
 &hsusb {
-	status = HSUSB_STATUS;
+	/delete-property/ clocks;
+	/delete-property/ clock-names;
+	status = "okay";
 	dwc3: usb@48200000 {
-		status = HSUSB_STATUS;
+		/delete-property/ phy;
+		/delete-property/ phy-names;
+		status = "okay";
 	};
 };
 
@@ -108,10 +159,18 @@
 	pinctrl-0 = <&pinctrl_uart0>;
 };
 
+/*
+ * UART2 workaround: use clock-frequency instead of clocks phandle.
+ * TF-A already configures UART2 pins and clock, so bypass the kernel
+ * clock/pinctrl framework (broken MHU → SE → clock chain).
+ */
 &uart2 {
-	pinctrl-names = "default";
-	pinctrl-0 = <&pinctrl_uart2>;
-	status = UART2_STATUS;
+	/delete-property/ clocks;
+	/delete-property/ clock-names;
+	/delete-property/ pinctrl-0;
+	/delete-property/ pinctrl-names;
+	clock-frequency = <100000000>;
+	status = "okay";
 };
 
 &uart3 {
@@ -330,7 +389,10 @@
 };
 
 &ethosu_npu {
-	status = ETHOSU_NPU_STATUS;
+	/delete-property/ memory-region;
+	/delete-property/ sram;
+	/delete-property/ dma-ranges;
+	status = "disabled";
 };
 
 &pinmux {
